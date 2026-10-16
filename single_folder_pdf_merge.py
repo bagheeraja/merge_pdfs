@@ -1,24 +1,25 @@
 """
-Single-Folder PDF Merger (merge_ord_single_folder.py)
+Single-Folder PDF Merger (single_folder_pdf_merge.py)
 
 Exact Intended Function:
 This script combines all PDF documents located directly inside a single selected 
 folder into one master combined PDF file. It eliminates hardcoded paths by prompting 
-the user to select an input folder and a destination folder via native GUI dialogs.
+the user to select an input folder and a destination folder via native GUI dialogs, 
+and allows the user to custom-name the final output file.
 
 Behavior:
 1. It scans ONLY the top level of the selected input folder for PDF files (ignoring subfolders).
 2. It sorts the discovered PDF files chronologically or alphabetically.
-3. It merges them into a single output file named after the input folder 
-   (e.g., [FolderName]_ord_combined.pdf) and saves it directly to the chosen destination folder.
-4. It embeds outline/bookmark items for each individual file based on its filename stem.
-5. It saves user directory choices locally in a configuration file for convenience in future runs.
+3. It prompts the user with a dialog box to specify a custom name for the combined output file.
+4. It merges them into the custom-named PDF file and saves it directly to the chosen destination folder.
+5. It embeds outline/bookmark items for each individual file based on its filename stem.
+6. It saves user directory choices locally in a configuration file for convenience in future runs.
 """
 
 import json
 import os
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 import tkinter as tk
 from pypdf import PdfWriter
 
@@ -63,6 +64,24 @@ def select_destination_folder(root: tk.Tk, initial_dir: str = "") -> str:
   )
 
 
+def prompt_output_filename(root: tk.Tk, default_name: str) -> str:
+  """Prompts the user to enter a custom filename for the combined output PDF."""
+  if root:
+    root.deiconify()
+  
+  filename = simpledialog.askstring(
+      "Output Filename",
+      "Enter the desired filename for the combined PDF\n(with or without .pdf extension):",
+      initialvalue=default_name,
+      parent=root
+  )
+  
+  if root:
+    root.withdraw()
+    
+  return filename.strip() if filename else ""
+
+
 def show_info(title: str, message: str, parent_window=None):
   """Displays a pop-up information box safely without locking hidden parent windows."""
   if parent_window:
@@ -72,8 +91,8 @@ def show_info(title: str, message: str, parent_window=None):
     parent_window.withdraw()
 
 
-def merge_single_folder_pdfs(root: tk.Tk, input_folder: str, output_folder: str):
-  """Merges all flat PDFs in the input folder into a single bookmarked PDF saved to the output folder."""
+def merge_single_folder_pdfs(root: tk.Tk, input_folder: str, output_folder: str, custom_filename: str):
+  """Merges all flat PDFs in the input folder into a single bookmarked PDF with a custom filename."""
   base_dir = Path(input_folder)
   dest_dir = Path(output_folder)
 
@@ -100,8 +119,11 @@ def merge_single_folder_pdfs(root: tk.Tk, input_folder: str, output_folder: str)
   # Ensure destination directory exists
   dest_dir.mkdir(parents=True, exist_ok=True)
 
-  # Define the output file path using the input folder's name
-  output_pdf = dest_dir / f"{base_dir.name}_ord_combined.pdf"
+  # Normalize custom filename (ensure it ends with .pdf)
+  if not custom_filename.lower().endswith(".pdf"):
+    custom_filename += ".pdf"
+
+  output_pdf = dest_dir / custom_filename
 
   # Write out the combined PDF to disk
   with open(output_pdf, "wb") as output_file:
@@ -112,7 +134,8 @@ def merge_single_folder_pdfs(root: tk.Tk, input_folder: str, output_folder: str)
   success_msg = (
       f"PDF Merging Complete!\n\n"
       f"• Files Combined: {len(pdf_files)}\n"
-      f"• Saved To: {output_pdf.resolve()}"
+      f"• Saved As: {output_pdf.name}\n"
+      f"• Saved To: {dest_dir.resolve()}"
   )
 
   print(f"\nSuccessfully created: {output_pdf.name}")
@@ -142,8 +165,15 @@ if __name__ == "__main__":
         # Save directories to config for future runs
         save_config({"last_input_dir": input_folder, "last_destination": dest_folder})
 
-        # 3. Run the single folder merge process
-        merge_single_folder_pdfs(root, input_folder, dest_folder)
+        # 3. Prompt user for custom output filename (pre-filled with folder name)
+        default_filename = f"{Path(input_folder).name}_combined.pdf"
+        custom_filename = prompt_output_filename(root, default_filename)
+
+        if custom_filename:
+          # 4. Run the single folder merge process
+          merge_single_folder_pdfs(root, input_folder, dest_folder, custom_filename)
+        else:
+          print("Output filename not provided. Exiting.")
       else:
         print("No destination folder selected. Exiting.")
     else:
